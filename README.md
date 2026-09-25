@@ -22,7 +22,6 @@ downloadable **HTML**, **PDF**, and **Word** reports — including a blank
 - [Security & customer data](#-security--customer-data)
 - [Project layout](#project-layout)
 - [Troubleshooting](#troubleshooting)
-- [Contributing / pushing changes](#contributing--pushing-changes)
 - [More docs](#more-docs)
 
 ---
@@ -194,24 +193,6 @@ legacy_flask/          Original Flask prototype (reference only)
 - **Edited text or exclusions look mismatched after deleting items** — fixed;
   widgets are keyed by stable finding IDs. If you see it, re-upload the JSON to
   clear stale session state.
-
-## Contributing / pushing changes
-
-Everyday git loop after the repo exists:
-```bash
-git status                 # see what changed
-git add .                  # stage (respects .gitignore)
-git commit -m "Describe your change"
-git push
-```
-For a shared repo, prefer a branch + Pull Request per change:
-```bash
-git checkout -b my-change
-git add . && git commit -m "..."
-git push -u origin my-change   # then open a PR on GitHub
-```
-Colleagues get your updates with `git pull`. Full guidance in
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## More docs
 
