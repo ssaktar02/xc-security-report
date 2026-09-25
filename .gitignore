@@ -1,0 +1,35 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ---- Virtual environment ----
+venv/
+.venv/
+env/
+
+# ---- Streamlit ----
+.streamlit/secrets.toml
+
+# ---- Runtime / generated output (do NOT commit) ----
+uploads/
+generated_reports/
+static/generated/
+*.pdf
+*.docx
+*.html
+!templates/**/*.html
+
+# ---- Customer data (NEVER commit real audit exports) ----
+# The anonymized sample IS committed; real exports are ignored.
+input/*.json
+!input/security-audit.sample.json
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Dashboard</title>
+</head>
+
+<body>
+
+    <h1>Namespace Dashboard</h1>
+
+    <h3>Tenant : {{ summary.tenant }}</h3>
+
+    <h3>Namespace : {{ summary.namespace }}</h3>
+
+    <h3>Security Score : {{ summary.score }}</h3>
+
+    <h3>Total Load Balancers : {{ total }}</h3>
+
+    <hr>
+
+    <h2>Load Balancers</h2>
+
+    <table border="1" cellpadding="8" cellspacing="0">
+
+    	<tr>
+    		<th>Load Balancer</th>
+    		<th>LB Findings</th>
+	</tr>
+
+    {% for lb in load_balancers %}
+
+    <tr>
+
+        <td>
+    	<a href="/report/{{ lb.name }}">
+        {{ lb.name }}
+    	</a>
+	</td>
+
+        <td>{{ lb.lb_findings|length }}</td>
+
+    </tr>
+
+    {% endfor %}
+
+</table>
+
+</body>
+
+</html>

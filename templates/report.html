@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ lb.name }}</title>
+</head>
+
+<body>
+
+<h1>Security Posture Report</h1>
+
+<hr>
+
+<h2>Load Balancer</h2>
+
+<p><b>Name:</b> {{ lb.name }}</p>
+
+{% set critical = namespace(value=0) %}
+{% set high = namespace(value=0) %}
+{% set medium = namespace(value=0) %}
+{% set low = namespace(value=0) %}
+{% set passed = namespace(value=0) %}
+
+{% for finding in lb.lb_findings %}
+
+    {% if finding.status == "PASS" %}
+        {% set passed.value = passed.value + 1 %}
+    {% endif %}
+
+    {% if finding.severity == "CRITICAL" %}
+        {% set critical.value = critical.value + 1 %}
+    {% elif finding.severity == "HIGH" %}
+        {% set high.value = high.value + 1 %}
+    {% elif finding.severity == "MEDIUM" %}
+        {% set medium.value = medium.value + 1 %}
+    {% elif finding.severity == "LOW" %}
+        {% set low.value = low.value + 1 %}
+    {% endif %}
+
+{% endfor %}
+
+<hr>
+
+<h2>Summary</h2>
+
+<table border="1" cellpadding="8" cellspacing="0">
+
+<tr>
+    <th>Critical</th>
+    <th>High</th>
+    <th>Medium</th>
+    <th>Low</th>
+    <th>Passed</th>
+</tr>
+
+<tr>
+
+<td>{{ critical.value }}</td>
+
+<td>{{ high.value }}</td>
+
+<td>{{ medium.value }}</td>
+
+<td>{{ low.value }}</td>
+
+<td>{{ passed.value }}</td>
+
+</tr>
+
+</table>
+
+<hr>
+
+<h2>Detailed Findings</h2>
+
+<table border="1" cellpadding="8" cellspacing="0">
+
+<tr>
+
+<th>Severity</th>
+
+<th>Status</th>
+
+<th>Rule</th>
+
+<th>Message</th>
+
+</tr>
+
+{% for finding in lb.lb_findings %}
+
+<tr>
+
+<td>{{ finding.severity }}</td>
+
+<td>{{ finding.status }}</td>
+
+<td>{{ finding.rule_name }}</td>
+
+<td>{{ finding.message }}</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+<br><br>
+
+<a href="/">Upload New JSON</a>
+
+</body>
+
+</html>

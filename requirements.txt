@@ -1,0 +1,15 @@
+# XC Security Report Generator — dependencies
+#
+# Install with:  pip install -r requirements.txt
+# Python 3.11+ recommended (developed/tested on 3.14).
+#
+# Only direct dependencies are pinned below; their transitive
+# dependencies (reportlab, html5lib, svglib, pypdf, etc. for xhtml2pdf)
+# are resolved automatically by pip.
+
+streamlit==1.59.2         # web UI
+pandas==3.0.3             # tables / data handling in the UI
+
+xhtml2pdf==0.2.17         # HTML -> PDF export (pure-Python; works on Windows)
+python-docx==1.2.0        # Word (.docx) best-practice guide export
+pillow==12.3.0            # image handling for the F5 logo on the PDF cover
