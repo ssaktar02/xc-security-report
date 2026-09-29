@@ -45,7 +45,7 @@ Prerequisites: **Python 3.11+** (tested on 3.14) and `pip`.
 
 **Windows (PowerShell):**
 ```powershell
-git clone https://github.com/s-aktar_f5inc/xc-security-report.git
+git clone https://github.com/ssaktar02/xc-security-report.git
 cd xc-security-report
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -55,7 +55,7 @@ streamlit run app.py --server.port 8501
 
 **macOS / Linux:**
 ```bash
-git clone https://github.com/s-aktar_f5inc/xc-security-report.git
+git clone https://github.com/ssaktar02/xc-security-report.git
 cd xc-security-report
 python3 -m venv venv
 source venv/bin/activate
