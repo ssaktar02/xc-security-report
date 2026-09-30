@@ -722,21 +722,15 @@ def render_lb_report(summary, lb, generated_at=None, entitlements=None, edited_m
         </div>
         '''
 
-    # --- Malware Detection section (WAF-03) ---
-    malware_findings = [f for f in lb.lb_findings if f.rule_id == "WAF-03" and _finding_key(f) not in _excluded]
+    # --- Malware Detection section (WAF-03 — product-gated) ---
+    malware_findings = [f for f in lb.lb_findings if f.rule_id == "WAF-03" and _is_entitled(f, _ent) and _finding_key(f) not in _excluded]
     malware_section = ""
-    if malware_findings or mud_findings:
-        malware_content = ""
-        if malware_findings:
-            malware_content += _findings_table(malware_findings, edited_messages=edited_messages)
-            malware_content += _inline_recommendations(malware_findings)
-        if mud_findings:
-            malware_content += f'<h3 style="margin-top:16px;font-size:14px;">Malicious User Detection ({len(mud_findings)})</h3>'
-            malware_content += _findings_table(mud_findings, edited_messages=edited_messages)
-            malware_content += _inline_recommendations(mud_findings)
+    if malware_findings:
+        malware_content = _findings_table(malware_findings, edited_messages=edited_messages)
+        malware_content += _inline_recommendations(malware_findings)
         malware_section = f'''
         <div class="card">
-          <h2>Malware Detection ({len(malware_findings) + len(mud_findings)})</h2>
+          <h2>Malware Detection ({len(malware_findings)})</h2>
           {malware_content}
         </div>
         '''
@@ -980,6 +974,7 @@ def render_lb_report(summary, lb, generated_at=None, entitlements=None, edited_m
     {bot_section}
     {api_prot_section}
     {malware_section}
+    {mud_section}
     {ddos_section}
     {csd_section}
     {sp_section}

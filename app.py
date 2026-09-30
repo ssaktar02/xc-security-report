@@ -56,6 +56,61 @@ if "show_trusted_clients" not in st.session_state:
     st.session_state.show_trusted_clients = False
 if "excluded_findings" not in st.session_state:
     st.session_state.excluded_findings = set()  # keys of findings excluded from export
+if "severity_overrides" not in st.session_state:
+    st.session_state.severity_overrides = {}    # finding_key -> internal severity
+if "status_overrides" not in st.session_state:
+    st.session_state.status_overrides = {}      # finding_key -> internal status
+
+
+# --- Manual severity/status override maps (user labels <-> internal codes) ---
+SEV_LABEL_OPTIONS = ["Auto", "Critical", "High", "Medium", "Low", "Informational"]
+_SEV_LABEL_TO_INTERNAL = {
+    "Critical": "CRITICAL", "High": "HIGH", "Medium": "MEDIUM",
+    "Low": "LOW", "Informational": "INFO",
+}
+_SEV_INTERNAL_TO_LABEL = {v: k for k, v in _SEV_LABEL_TO_INTERNAL.items()}
+
+STATUS_LABEL_OPTIONS = ["Auto", "REVIEW", "CAUTION", "PASS", "INFO", "SKIP"]
+_STATUS_LABEL_TO_INTERNAL = {
+    "REVIEW": "FAIL", "CAUTION": "WARN", "PASS": "PASS",
+    "INFO": "INFO", "SKIP": "SKIP",
+}
+_STATUS_INTERNAL_TO_LABEL = {v: k for k, v in _STATUS_LABEL_TO_INTERNAL.items()}
+
+
+def _apply_finding_overrides(findings):
+    """Apply manual per-finding severity/status overrides in place.
+
+    The original (post-correction) values are captured once per object so an
+    override can always be reverted to "Auto". Because every tab, metric and
+    export reads f.severity / f.status, applying here — before any grouping —
+    makes a re-classified finding move to the right tab and re-sort everywhere.
+    """
+    sev_ov = st.session_state.severity_overrides
+    stat_ov = st.session_state.status_overrides
+    for f in findings:
+        if not hasattr(f, "_base_severity"):
+            f._base_severity = f.severity
+            f._base_status = f.status
+        key = f"{f.rule_id}::{f.object_name}"
+        f.severity = sev_ov.get(key, f._base_severity)
+        f.status = stat_ov.get(key, f._base_status)
+
+
+def _on_change_severity(widget_key, finding_key):
+    val = st.session_state.get(widget_key)
+    if val and val != "Auto":
+        st.session_state.severity_overrides[finding_key] = _SEV_LABEL_TO_INTERNAL[val]
+    else:
+        st.session_state.severity_overrides.pop(finding_key, None)
+
+
+def _on_change_status(widget_key, finding_key):
+    val = st.session_state.get(widget_key)
+    if val and val != "Auto":
+        st.session_state.status_overrides[finding_key] = _STATUS_LABEL_TO_INTERNAL[val]
+    else:
+        st.session_state.status_overrides.pop(finding_key, None)
 
 
 def _load_file(uploaded_file):
@@ -82,6 +137,9 @@ def _load_file(uploaded_file):
     st.session_state.policy_overrides = {}
     st.session_state.waf_modes = {}
     st.session_state.policy_classifications = {}
+    st.session_state.excluded_findings = set()
+    st.session_state.severity_overrides = {}
+    st.session_state.status_overrides = {}
 
 
 def _finding_key(f) -> str:
@@ -96,6 +154,20 @@ def _status_dot(status: str, severity: str) -> str:
 def _health_badge(health: str, icon: str):
     color = rd.health_color(health)
     st.markdown(f"### <span style='color:{color}'>{icon} {health}</span>", unsafe_allow_html=True)
+
+
+def _on_toggle_exclude(widget_key, finding_key):
+    """Keep excluded_findings in sync the instant a checkbox toggles.
+
+    on_change fires *before* the script reruns, so the exclusion set is
+    already current when the summary metrics and the report are built. This
+    avoids the one-rerun lag where a just-unchecked rule still appeared in the
+    download until the next interaction.
+    """
+    if st.session_state.get(widget_key):
+        st.session_state.excluded_findings.discard(finding_key)
+    else:
+        st.session_state.excluded_findings.add(finding_key)
 
 
 def render_editable_findings_table(findings, key_prefix, show_object=True, show_applicability=False):
@@ -137,19 +209,19 @@ def render_editable_findings_table(findings, key_prefix, show_object=True, show_
         # Build the expander label
         edited_marker = " ✏️" if is_edited else ""
         excluded_marker = " 🚫" if key in st.session_state.excluded_findings else ""
+        overridden = key in st.session_state.severity_overrides or key in st.session_state.status_overrides
+        override_marker = " 🔧" if overridden else ""
         obj_text = f" | {f.object_name}" if show_object and f.object_name else ""
-        label = f"{rd.status_display_label(status_upper)} | {f.severity.upper()} | {f.rule_name} ({f.rule_id}){obj_text}{edited_marker}{excluded_marker}"
+        label = f"{rd.status_display_label(status_upper)} | {f.severity.upper()} | {f.rule_name} ({f.rule_id}){obj_text}{edited_marker}{override_marker}{excluded_marker}"
 
         # Row: expander (left, wide) + delete toggle (right, narrow)
         col_exp, col_del = st.columns([20, 1])
         with col_del:
             included = key not in st.session_state.excluded_findings
-            keep = st.checkbox("✓", value=included, key=f"incl_{key_prefix}_{uid}",
-                               label_visibility="collapsed")
-            if not keep:
-                st.session_state.excluded_findings.add(key)
-            elif key in st.session_state.excluded_findings:
-                st.session_state.excluded_findings.discard(key)
+            incl_key = f"incl_{key_prefix}_{uid}"
+            st.checkbox("✓", value=included, key=incl_key,
+                        label_visibility="collapsed",
+                        on_change=_on_toggle_exclude, args=(incl_key, key))
 
         with col_exp:
             exp_icon = "⚠️" if auto_expand else icon
@@ -169,6 +241,26 @@ def render_editable_findings_table(findings, key_prefix, show_object=True, show_
                     st.session_state.edited_messages[key] = new_msg
                 elif key in st.session_state.edited_messages:
                     del st.session_state.edited_messages[key]
+
+                # Manual status / severity override (moves finding to the
+                # matching tab and re-sorts everywhere; "Auto" reverts).
+                ov_c1, ov_c2 = st.columns(2)
+                with ov_c1:
+                    stat_wkey = f"statovr_{key_prefix}_{uid}"
+                    cur_stat = st.session_state.status_overrides.get(key)
+                    st.session_state[stat_wkey] = _STATUS_INTERNAL_TO_LABEL.get(cur_stat, "Auto")
+                    st.selectbox(
+                        "Status override", STATUS_LABEL_OPTIONS, key=stat_wkey,
+                        on_change=_on_change_status, args=(stat_wkey, key),
+                    )
+                with ov_c2:
+                    sev_wkey = f"sevovr_{key_prefix}_{uid}"
+                    cur_sev = st.session_state.severity_overrides.get(key)
+                    st.session_state[sev_wkey] = _SEV_INTERNAL_TO_LABEL.get(cur_sev, "Auto")
+                    st.selectbox(
+                        "Severity override", SEV_LABEL_OPTIONS, key=sev_wkey,
+                        on_change=_on_change_severity, args=(sev_wkey, key),
+                    )
 
                 # Applicability override (service policy tables)
                 if show_applicability:
@@ -203,6 +295,42 @@ def render_editable_findings_table(findings, key_prefix, show_object=True, show_
 def _render_inline_recommendations(findings):
     """Legacy stub — recommendations are now shown inline per finding row."""
     pass
+
+
+def render_manual_checklist(skip_ids=None):
+    """Editable Tenant-Wide manual checklist.
+
+    Uses shared widget keys (chk_status_* / chk_notes_*) and writes to the
+    shared st.session_state.checklist_answers, so edits are connected across
+    the Namespace Report and every Load Balancer's Tenant-Wide Context tab —
+    change it in one place and it updates everywhere.
+    """
+    skip_ids = skip_ids or set()
+    answers = st.session_state.checklist_answers
+    for item in MANUAL_CHECKLIST_ITEMS:
+        if item.id in skip_ids:
+            continue
+        col1, col2 = st.columns([1, 3])
+        current = answers.get(item.id, {"status": "Not Reviewed", "notes": ""})
+        with col1:
+            status = st.selectbox(
+                item.label,
+                STATUS_OPTIONS,
+                index=STATUS_OPTIONS.index(current["status"]),
+                key=f"chk_status_{item.id}",
+                label_visibility="collapsed",
+            )
+        with col2:
+            st.write(f"**{item.label}**")
+            st.caption(item.guidance)
+            notes = st.text_input(
+                "Notes", value=current["notes"], key=f"chk_notes_{item.id}",
+                label_visibility="collapsed", placeholder="Optional notes...",
+            )
+            if status in ("No", "N/A") and item.recommendation:
+                st.info(f"**Recommendation:** {item.recommendation}" + (f"\n\n[Reference]({item.reference_url})" if item.reference_url else ""))
+        answers[item.id] = {"status": status, "notes": notes}
+    st.session_state.checklist_answers = answers
 
 
 # ----------------------------------------------------------------------
@@ -249,6 +377,14 @@ with st.sidebar:
             key="toggle_trusted_clients",
             help="Show Trusted Clients WAF, IP Reputation, and Threat Intel findings per LB",
         )
+        n_over = len(st.session_state.severity_overrides) + len(st.session_state.status_overrides)
+        if n_over:
+            st.divider()
+            st.caption(f"🔧 {n_over} manual severity/status override(s) active")
+            if st.button("Reset all overrides", use_container_width=True):
+                st.session_state.severity_overrides = {}
+                st.session_state.status_overrides = {}
+                st.rerun()
     else:
         page = None
         st.info("Upload a Security Auditor JSON export to get started.")
@@ -272,6 +408,9 @@ reports = st.session_state.reports
 ns = st.session_state.namespace_report
 all_findings = st.session_state.all_findings
 entitlements = st.session_state.entitlements
+
+# Apply manual severity/status overrides before any grouping/metrics/exports.
+_apply_finding_overrides(all_findings)
 
 any_unpurchased = any(not v for v in entitlements.values())
 
@@ -509,29 +648,7 @@ elif page == "Namespace Report":
         "(console/tenant-level operational practices). Fill them in by hand — "
         "your answers are included in the downloaded HTML report."
     )
-    answers = st.session_state.checklist_answers
-    for item in MANUAL_CHECKLIST_ITEMS:
-        col1, col2 = st.columns([1, 3])
-        current = answers.get(item.id, {"status": "Not Reviewed", "notes": ""})
-        with col1:
-            status = st.selectbox(
-                item.label,
-                STATUS_OPTIONS,
-                index=STATUS_OPTIONS.index(current["status"]),
-                key=f"chk_status_{item.id}",
-                label_visibility="collapsed",
-            )
-        with col2:
-            st.write(f"**{item.label}**")
-            st.caption(item.guidance)
-            notes = st.text_input(
-                "Notes", value=current["notes"], key=f"chk_notes_{item.id}",
-                label_visibility="collapsed", placeholder="Optional notes...",
-            )
-            if status in ("No", "N/A") and item.recommendation:
-                st.info(f"**Recommendation:** {item.recommendation}" + (f"\n\n[Reference]({item.reference_url})" if item.reference_url else ""))
-        answers[item.id] = {"status": status, "notes": notes}
-    st.session_state.checklist_answers = answers
+    render_manual_checklist()
     # Apply TLS blindfolded checklist answer to CERT-02 findings
     apply_tls_blindfolded(all_findings, st.session_state.checklist_answers)
 
@@ -611,70 +728,11 @@ elif page == "Load Balancer Report":
         st.caption(f"WAF Enforcement Mode: {waf_mode}")
         st.session_state.waf_modes[lb.name] = waf_mode
     with col_dl:
-        # Build tenant context for HTML export (without WAF exclusion - now auto-detected)
-        tenant_ctx = {
-            "summary_lines": [
-                ("Alert Policies Active", any(f.status.upper() == "PASS" for f in ns.alert_policy_findings) if ns and ns.alert_policy_findings else False),
-                ("SIEM / Global Log Receiver Configured", any(f.status.upper() == "PASS" for f in ns.log_receiver_findings) if ns and ns.log_receiver_findings else False),
-            ] + [
-                (item.label, st.session_state.checklist_answers.get(item.id, {}).get("status", "Not Reviewed"))
-                for item in MANUAL_CHECKLIST_ITEMS
-                if item.id != "tls-blindfolded"
-            ],
-        }
-        # WAF exclusion auto-detected from namespace-level service policy findings
-        has_waf_excl, waf_excl_policies = pt.has_waf_exclusion_policies(lb.name, all_findings)
-        tenant_ctx["waf_exclusion_detected"] = has_waf_excl
-        tenant_ctx["waf_exclusion_policies"] = waf_excl_policies
-        tenant_ctx["waf_exclusion_notes"] = st.session_state.get(f"waf_excl_notes_{lb.name}", "")
-
-        lb_html = he.render_lb_report(
-            summary, lb, entitlements=entitlements,
-            edited_messages=st.session_state.edited_messages,
-            policy_overrides=st.session_state.policy_overrides,
-            waf_mode=waf_mode if waf_mode != "Not Set" else None,
-            tenant_context=tenant_ctx,
-            checklist_answers=st.session_state.checklist_answers,
-            policy_classifications=st.session_state.policy_classifications.get(lb.name),
-            show_timestamp=st.session_state.show_timestamp,
-            all_findings=all_findings,
-            show_trusted_clients=st.session_state.show_trusted_clients,
-            excluded_findings=st.session_state.excluded_findings,
+        st.caption(
+            "📥 **Downloads** are at the bottom of this page. Finish "
+            "excluding findings / editing messages first, then click "
+            "**Generate Report** — the report always reflects your latest changes."
         )
-        st.download_button(
-            "⬇️ Download Report (HTML)",
-            data=lb_html,
-            file_name=f"{lb.name}.html",
-            mime="text/html",
-            use_container_width=True,
-        )
-        try:
-            pdf_bytes = pdf_export.render_lb_pdf(lb_html)
-            st.download_button(
-                "📄 Download Report (PDF)",
-                data=pdf_bytes,
-                file_name=f"{lb.name}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        except Exception as e:
-            st.error(f"PDF generation failed: {e}")
-        try:
-            docx_bytes = docx_export.render_best_practice_docx(
-                summary, [lb], all_findings,
-                manual_items=MANUAL_CHECKLIST_ITEMS,
-                edited_messages=st.session_state.edited_messages,
-                excluded_findings=st.session_state.excluded_findings,
-            )
-            st.download_button(
-                "📝 Download Best Practice Guide (Word)",
-                data=docx_bytes,
-                file_name=f"{lb.name}-best-practice-guide.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-            )
-        except Exception as e:
-            st.error(f"Word guide generation failed: {e}")
 
     # Adjust summary metrics for excluded findings
     # We must deduplicate because the same key can appear in multiple sub-lists
@@ -772,8 +830,8 @@ elif page == "Load Balancer Report":
     # Certificate findings
     cert_findings = lb.certificate_findings
 
-    # Malware Detection (WAF-03)
-    malware_findings = [f for f in lb.lb_findings if f.rule_id == "WAF-03"]
+    # Malware Detection (WAF-03 — product-gated)
+    malware_findings = [f for f in lb.lb_findings if f.rule_id == "WAF-03" and is_entitled(f, entitlements)]
 
     # WAF exclusion auto-detect from namespace findings
     has_waf_excl, waf_excl_policies = pt.has_waf_exclusion_policies(lb.name, all_findings)
@@ -782,7 +840,7 @@ elif page == "Load Balancer Report":
         "High", "Medium", "Low",
         "TLS", "Certificates", "Origin Pools", "Health Check",
         "WAF Configuration", "WAF Policy Details",
-        "Bot Defense", "API Protection", "Malware Detection",
+        "Bot Defense", "API Protection", "Malware Detection", "Malicious User Detection",
         "DDoS Protection", "Client-Side Defense",
         "Service Policies", "Rate Limiting", "IP Reputation",
         "Informational Findings", "Baseline Compliance",
@@ -916,14 +974,17 @@ elif page == "Load Balancer Report":
             _render_inline_recommendations(malware_findings)
         else:
             st.caption("No Malware Detection findings for this LB.")
+
+    # --- Malicious User Detection (MUD) tab (BOT-02/03) ---
+    with tabs[12]:
         if mud_findings:
-            st.divider()
-            st.subheader("Malicious User Detection (BOT-02/03)")
             render_editable_findings_table(mud_findings, key_prefix=f"mud_{lb.name}", show_object=False)
             _render_inline_recommendations(mud_findings)
+        else:
+            st.caption("No Malicious User Detection findings for this LB.")
 
     # --- DDoS Protection tab ---
-    with tabs[12]:
+    with tabs[13]:
         if ddos_findings:
             render_editable_findings_table(ddos_findings, key_prefix=f"ddos_{lb.name}", show_object=False)
             _render_inline_recommendations(ddos_findings)
@@ -935,7 +996,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(tc_threat_intel, key_prefix=f"tc_ti_{lb.name}", show_object=True)
 
     # --- Client-Side Defense tab ---
-    with tabs[13]:
+    with tabs[14]:
         if csd_findings:
             render_editable_findings_table(csd_findings, key_prefix=f"csd_{lb.name}", show_object=False)
             _render_inline_recommendations(csd_findings)
@@ -947,7 +1008,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(csd_sp, key_prefix=f"csd_sp_{lb.name}", show_object=True)
 
     # --- Service Policies tab ---
-    with tabs[14]:
+    with tabs[15]:
         if lb.service_policy_names:
             st.caption(f"Assigned policies: {', '.join(lb.service_policy_names)}")
 
@@ -1013,7 +1074,7 @@ elif page == "Load Balancer Report":
             st.caption("No service policies linked to this load balancer.")
 
     # --- Rate Limiting tab ---
-    with tabs[15]:
+    with tabs[16]:
         if rate_limit_findings:
             render_editable_findings_table(rate_limit_findings, key_prefix=f"ratelim_{lb.name}", show_object=False)
             _render_inline_recommendations(rate_limit_findings)
@@ -1021,7 +1082,7 @@ elif page == "Load Balancer Report":
             st.caption("No Rate Limiting findings for this LB.")
 
     # --- IP Reputation tab ---
-    with tabs[16]:
+    with tabs[17]:
         if ip_rep_findings:
             render_editable_findings_table(ip_rep_findings, key_prefix=f"iprep_{lb.name}", show_object=False)
             _render_inline_recommendations(ip_rep_findings)
@@ -1037,7 +1098,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(tc_ip_rep, key_prefix=f"tc_iprep_{lb.name}", show_object=True)
 
     # --- Informational Findings tab ---
-    with tabs[17]:
+    with tabs[18]:
         if informational_findings:
             st.caption(f"{len(informational_findings)} informational findings")
             render_editable_findings_table(informational_findings, key_prefix=f"info_{lb.name}", show_object=True)
@@ -1045,7 +1106,7 @@ elif page == "Load Balancer Report":
             st.caption("No informational findings.")
 
     # --- Baseline Compliance tab ---
-    with tabs[18]:
+    with tabs[19]:
         if baseline_findings:
             st.caption(f"{len(baseline_findings)} verified compliant checks")
             render_editable_findings_table(baseline_findings, key_prefix=f"baseline_{lb.name}", show_object=True)
@@ -1053,8 +1114,9 @@ elif page == "Load Balancer Report":
             st.caption("No baseline compliance findings.")
 
     # --- Tenant-Wide Context tab ---
-    with tabs[19]:
-        st.caption("Not specific to this Load Balancer - see the Namespace Report to edit these.")
+    with tabs[20]:
+        st.caption("These tenant-wide items are shared with the Namespace Report — "
+                   "editing them here updates them everywhere.")
         # Auto-detected items (check finding STATUS, not just existence)
         alert_active = any(f.status.upper() == "PASS" for f in ns.alert_policy_findings) if ns and ns.alert_policy_findings else False
         glr_active = any(f.status.upper() == "PASS" for f in ns.log_receiver_findings) if ns and ns.log_receiver_findings else False
@@ -1064,17 +1126,20 @@ elif page == "Load Balancer Report":
         st.write(f"- **SIEM / Global Log Receiver Configured:** {glr_active}")
         if not glr_active:
             st.info("**Recommendation:** Configure a Global Log Receiver to forward security logs to your SIEM for centralized monitoring, correlation, and incident response.\n\n[Reference](https://docs.cloud.f5.com/docs-v2/shared-configuration/how-tos/alerting/alerts-email-sms)")
-        # Manual checklist items (excluding TLS blindfolded — mapped to CERT-02)
-        for item in MANUAL_CHECKLIST_ITEMS:
-            if item.id == "tls-blindfolded":
-                continue
-            answer = st.session_state.checklist_answers.get(item.id, {"status": "Not Reviewed", "notes": ""})
-            st.write(f"- **{item.label}:** {answer['status']}" + (f" — _{answer['notes']}_" if answer["notes"] else ""))
-            if answer["status"] in ("No", "Not Reviewed") and item.recommendation:
-                st.info(f"**Recommendation:** {item.recommendation}" + (f"\n\n[Reference]({item.reference_url})" if item.reference_url else ""))
+        st.divider()
+        st.subheader("Manual Review Checklist")
+        st.caption(
+            "Tenant-level operational practices that can't be detected from the "
+            "export. Answers are shared with the Namespace Report and flow into "
+            "the downloaded reports."
+        )
+        # tls-blindfolded is surfaced per-LB via CERT-02, so skip it here.
+        render_manual_checklist(skip_ids={"tls-blindfolded"})
+        # Re-apply so a change made here reflects in CERT-02 on the next rerun.
+        apply_tls_blindfolded(all_findings, st.session_state.checklist_answers)
 
     # --- Additional Opportunities tab ---
-    with tabs[20]:
+    with tabs[21]:
         not_purchased_open_tab = [f for f in lb_findings_not_purchased if f.status.upper() != "PASS"]
         if not_purchased_open_tab:
             st.caption("Potential enhancements to further strengthen the security posture.")
@@ -1082,3 +1147,97 @@ elif page == "Load Balancer Report":
                 st.write(f"- **{f.rule_name}**: {f.message}")
         else:
             st.caption("No additional opportunities to show.")
+
+    # --- Report generation & download (bottom) -----------------------------
+    # Placed after ALL findings tables so every exclusion / edited message has
+    # already been applied this run. Generation only happens on button click,
+    # so toggling checkboxes no longer re-renders the (expensive) PDF each time.
+    st.divider()
+    st.subheader("📥 Generate & Download Report")
+    st.caption(
+        "Click **Generate / Refresh Report** after you finish excluding "
+        "findings and editing messages. The output always reflects your latest "
+        "changes. If you change anything afterwards, click Generate again."
+    )
+
+    gen_key = f"gen_report_{lb.name}"
+    if st.button("🔄 Generate / Refresh Report", key=f"btn_{gen_key}",
+                 type="primary", use_container_width=True):
+        tenant_ctx = {
+            "summary_lines": [
+                ("Alert Policies Active", any(f.status.upper() == "PASS" for f in ns.alert_policy_findings) if ns and ns.alert_policy_findings else False),
+                ("SIEM / Global Log Receiver Configured", any(f.status.upper() == "PASS" for f in ns.log_receiver_findings) if ns and ns.log_receiver_findings else False),
+            ] + [
+                (item.label, st.session_state.checklist_answers.get(item.id, {}).get("status", "Not Reviewed"))
+                for item in MANUAL_CHECKLIST_ITEMS
+                if item.id != "tls-blindfolded"
+            ],
+        }
+        has_waf_excl, waf_excl_policies = pt.has_waf_exclusion_policies(lb.name, all_findings)
+        tenant_ctx["waf_exclusion_detected"] = has_waf_excl
+        tenant_ctx["waf_exclusion_policies"] = waf_excl_policies
+        tenant_ctx["waf_exclusion_notes"] = st.session_state.get(f"waf_excl_notes_{lb.name}", "")
+
+        lb_html = he.render_lb_report(
+            summary, lb, entitlements=entitlements,
+            edited_messages=st.session_state.edited_messages,
+            policy_overrides=st.session_state.policy_overrides,
+            waf_mode=waf_mode if waf_mode != "Not Set" else None,
+            tenant_context=tenant_ctx,
+            checklist_answers=st.session_state.checklist_answers,
+            policy_classifications=st.session_state.policy_classifications.get(lb.name),
+            show_timestamp=st.session_state.show_timestamp,
+            all_findings=all_findings,
+            show_trusted_clients=st.session_state.show_trusted_clients,
+            excluded_findings=st.session_state.excluded_findings,
+        )
+        result = {"html": lb_html}
+        try:
+            result["pdf"] = pdf_export.render_lb_pdf(lb_html)
+        except Exception as e:
+            result["pdf_err"] = str(e)
+        try:
+            result["docx"] = docx_export.render_best_practice_docx(
+                summary, [lb], all_findings,
+                manual_items=MANUAL_CHECKLIST_ITEMS,
+                edited_messages=st.session_state.edited_messages,
+                excluded_findings=st.session_state.excluded_findings,
+            )
+        except Exception as e:
+            result["docx_err"] = str(e)
+        st.session_state[gen_key] = result
+
+    result = st.session_state.get(gen_key)
+    if result:
+        st.download_button(
+            "⬇️ Download Report (HTML)",
+            data=result["html"],
+            file_name=f"{lb.name}.html",
+            mime="text/html",
+            use_container_width=True,
+            key=f"dl_html_{lb.name}",
+        )
+        if result.get("pdf"):
+            st.download_button(
+                "📄 Download Report (PDF)",
+                data=result["pdf"],
+                file_name=f"{lb.name}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key=f"dl_pdf_{lb.name}",
+            )
+        elif result.get("pdf_err"):
+            st.error(f"PDF generation failed: {result['pdf_err']}")
+        if result.get("docx"):
+            st.download_button(
+                "📝 Download Best Practice Guide (Word)",
+                data=result["docx"],
+                file_name=f"{lb.name}-best-practice-guide.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                key=f"dl_docx_{lb.name}",
+            )
+        elif result.get("docx_err"):
+            st.error(f"Word guide generation failed: {result['docx_err']}")
+    else:
+        st.info("No report generated yet — click **Generate / Refresh Report** above.")

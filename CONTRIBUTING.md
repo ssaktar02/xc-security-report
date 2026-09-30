@@ -59,18 +59,31 @@ exports.
 
 ### Add a manual checklist item
 `manual_checklist.py` — append a `ManualChecklistItem` to
-`MANUAL_CHECKLIST_ITEMS`.
+`MANUAL_CHECKLIST_ITEMS`. It renders automatically on both the Namespace Report
+and each LB's Tenant-Wide Context tab via the shared `render_manual_checklist()`
+helper.
 
 ### Move a rule to a different report tab
 Tab membership is defined in `app.py` (`_STANDALONE_TAB_RULES`,
 `_INFORMATIONAL_RULES`) and mirrored in `html_export.py`. Update **both** so the
 app and the HTML/PDF exports stay consistent.
 
+### Add a new report tab
+In `app.py` the tabs are index-based (`st.tabs([...])` + `with tabs[N]:`). To
+insert a tab, add its label in the `st.tabs([...])` list **and renumber every
+`with tabs[N]:` after it** (renumber highest-index-first to avoid collisions).
+Add the matching `{..._section}` in `html_export.py` so the export agrees.
+
 ## Gotchas
 
 - **Streamlit widget keys must be stable**, not index-based. Findings tables key
   widgets by `rule_id::object_name` (plus an occurrence counter) so edits and
   exclusions don't shift onto the wrong finding when the list re-orders.
+- **Streamlit render order.** State read at the top of the script uses
+  *pre-interaction* values on the rerun a lower widget triggers. Use `on_change`
+  callbacks (as exclusions/overrides do) or read state below the widget. Reports
+  are built only on the bottom **Generate / Refresh Report** button, after all
+  findings render, so exports never use stale state.
 - **PDF = xhtml2pdf only.** WeasyPrint needs GTK/Pango and does not work on
   Windows. xhtml2pdf is picky: no `width:100%` in tables, no
   `display:table-cell`, no full-page background divs. `pdf_export.py` already

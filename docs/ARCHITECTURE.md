@@ -65,14 +65,41 @@ Per-Load-Balancer reports are organized (in `app.py`, mirrored in
    (REVIEW/CAUTION) findings.
 2. **Category tabs** — TLS, Certificates, Origin Pools, Health Check, WAF
    Configuration, WAF Policy Details, Bot Defense, API Protection, Malware
-   Detection, DDoS, Client-Side Defense, Service Policies, Rate Limiting, IP
-   Reputation.
+   Detection, Malicious User Detection (MUD), DDoS, Client-Side Defense, Service
+   Policies, Rate Limiting, IP Reputation. Malware Detection (`WAF-03`) and MUD
+   (`BOT-02`/`BOT-03`) are separate tabs, each gated by its own product
+   entitlement.
 3. **Informational / Baseline Compliance** — INFO/SKIP and PASS findings that
    don't belong to a category tab.
-4. **Tenant-Wide Context / Additional Opportunities**.
+4. **Tenant-Wide Context / Additional Opportunities** — Tenant-Wide Context
+   hosts the manual checklist, shared/synced with the Namespace Report.
 
 Because the two files must agree, any change to tab membership has to be applied
-in **both** `app.py` and `html_export.py`.
+in **both** `app.py` and `html_export.py`. In `app.py` the tabs are index-based
+(`tabs[N]`), so inserting a tab means renumbering the ones after it.
+
+## Reviewer edits & report generation
+
+All reviewer edits are **session-state only** (reset on new upload), keyed by a
+stable `rule_id::object_name` finding key:
+
+- `edited_messages`, `excluded_findings` — message text and per-finding exclusion.
+- `severity_overrides`, `status_overrides` — manual per-finding re-classification.
+  Applied in place (over a captured original) **before grouping**, via
+  `_apply_finding_overrides()` in `app.py`, so tabs, metrics, and exports all
+  reflect the change and re-sort. `Auto` reverts to the original.
+- `checklist_answers` — the manual checklist, rendered by one shared
+  `render_manual_checklist()` helper on both the Namespace Report and each LB's
+  Tenant-Wide Context tab (same widget keys ⇒ the surfaces stay in sync).
+
+Widgets are keyed by finding identity (not list index) so edits don't shift onto
+the wrong row when the list re-orders. Exclusions/overrides use `on_change`
+callbacks so state is current before the rerun renders metrics.
+
+HTML/PDF/Word are built **on demand** from a **Generate / Refresh Report**
+button at the bottom of the LB report (after all findings render), not on every
+interaction — this keeps toggling fast and guarantees the output reflects the
+latest state.
 
 ## Status labels & colors
 

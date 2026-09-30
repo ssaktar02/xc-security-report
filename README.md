@@ -34,10 +34,12 @@ downloadable **HTML**, **PDF**, and **Word** reports — including a blank
   tenant-wide items into a namespace report.
 - **Presents** results as an interactive dashboard with per-Load-Balancer
   drill-downs organized into severity and category tabs.
-- **Lets the reviewer edit** finding messages and **exclude** findings before
-  export — metrics update live.
-- **Exports** self-contained **HTML**, a print-ready **PDF** (F5-branded cover,
-  headers/footers), and an editable **Word** best-practice guide / checklist.
+- **Lets the reviewer edit** finding messages, **override severity/status**,
+  and **exclude** findings before export — tabs, metrics, and counts update live.
+- **Exports on demand** — click **Generate Report** to build a self-contained
+  **HTML** file, a print-ready **PDF** (F5-branded cover, headers/footers), and
+  an editable **Word** best-practice guide / checklist that reflect your latest
+  edits.
 
 ## Quick start
 
@@ -77,14 +79,26 @@ the sidebar, or try the included **`input/security-audit.sample.json`**
    per-Load-Balancer table. Click a Load Balancer to open its full report.
 4. **Work through a Load Balancer report** — findings are grouped into tabs
    (High / Medium / Low, then per-category tabs like TLS, Origin Pools, WAF…).
-   For each finding you can:
+   For each finding (expand it) you can:
    - **Edit** the message text (internal only; the customer-facing export shows
-     the clean edited text).
+     the clean edited text). Edited rows are marked ✏️.
+   - **Override severity/status** via the two dropdowns — e.g. flip a finding
+     from High → Medium, or REVIEW → CAUTION. The finding immediately re-groups
+     into the matching tab and all counts update. `Auto` reverts to the original
+     auditor value; overridden rows are marked 🔧. A **Reset all overrides**
+     button appears in the sidebar.
    - **Exclude** it using the checkbox on the right — excluded findings drop out
      of the report and the totals adjust automatically.
-5. **Fill the manual checklist** (Namespace Report page) for items the auditor
-   can't detect (e.g. console IP restriction).
-6. **Download** the report in the format you need (HTML / PDF / Word).
+5. **Fill the manual checklist** for items the auditor can't detect (e.g.
+   console IP restriction). It's available on **both** the Namespace Report and
+   each Load Balancer's **Tenant-Wide Context** tab — the two are connected, so
+   an edit in one place updates everywhere.
+6. **Generate & download** — scroll to the **Generate & Download Report**
+   section at the bottom of a Load Balancer report and click **Generate /
+   Refresh Report**. The report is built only on click (so toggling findings
+   stays fast) and always reflects your latest edits/exclusions/overrides.
+   Download it as HTML / PDF / Word. Click Generate again after any further
+   change.
 
 ## Reports & exports
 
@@ -116,15 +130,23 @@ parentheses):
 - **Severity tabs** (High/Medium/Low) contain only actionable findings
   (REVIEW/CAUTION). PASS/INFO/SKIP live in their category or baseline tabs.
 - **Category tabs** (TLS, Certificates, Origin Pools, Health Check, WAF
-  Configuration, WAF Policy Details, Bot, API, Malware, DDoS, Client-Side
-  Defense, Service Policies, Rate Limiting, …) group everything for that area.
+  Configuration, WAF Policy Details, Bot Defense, API Protection, **Malware
+  Detection**, **Malicious User Detection (MUD)**, DDoS, Client-Side Defense,
+  Service Policies, Rate Limiting, …) group everything for that area. Malware
+  Detection (WAF-03) and MUD (BOT-02/03) are **separate** tabs/sections and each
+  is independently gated by its product entitlement.
+- **Tenant-Wide Context** holds tenant-level items (auto-detected alerting/SIEM
+  plus the editable manual checklist), shared with the Namespace Report.
 - **Additional Opportunities** surfaces findings for unpurchased products in a
   softer framing, kept out of the customer-facing severity counts.
 
 ## Customizing
 
-- **Change a rule's severity** — add an entry to `_SEVERITY_OVERRIDES` in
-  `finding_corrections.py`. Example already in place:
+- **Change a finding's severity/status for one report** — use the per-finding
+  **Severity/Status override** dropdowns in the UI (session-only, not saved to
+  code).
+- **Change a rule's *default* severity permanently** — add an entry to
+  `_SEVERITY_OVERRIDES` in `finding_corrections.py`. Example already in place:
   ```python
   _SEVERITY_OVERRIDES = {
       "SP-01": "MEDIUM",   # Service Policy No Allow-All: High -> Medium
