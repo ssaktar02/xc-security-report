@@ -837,7 +837,7 @@ elif page == "Load Balancer Report":
     has_waf_excl, waf_excl_policies = pt.has_waf_exclusion_policies(lb.name, all_findings)
 
     tabs = st.tabs([
-        "High", "Medium", "Low",
+        "Critical", "High", "Medium", "Low",
         "TLS", "Certificates", "Origin Pools", "Health Check",
         "WAF Configuration", "WAF Policy Details",
         "Bot Defense", "API Protection", "Malware Detection", "Malicious User Detection",
@@ -848,25 +848,31 @@ elif page == "Load Balancer Report":
     ])
 
     with tabs[0]:
+        critical = grouped.get("CRITICAL", [])
+        st.caption(f"{len(critical)} critical findings")
+        render_editable_findings_table(critical, key_prefix=f"crit_{lb.name}", show_object=True)
+        _render_inline_recommendations(critical)
+
+    with tabs[1]:
         high = grouped.get("HIGH", [])
         st.caption(f"{len(high)} high findings")
         render_editable_findings_table(high, key_prefix=f"high_{lb.name}", show_object=True)
         _render_inline_recommendations(high)
 
-    with tabs[1]:
+    with tabs[2]:
         medium = grouped.get("MEDIUM", [])
         st.caption(f"{len(medium)} medium findings")
         render_editable_findings_table(medium, key_prefix=f"med_{lb.name}", show_object=True)
         _render_inline_recommendations(medium)
 
-    with tabs[2]:
+    with tabs[3]:
         low = grouped.get("LOW", [])
         st.caption(f"{len(low)} low findings")
         render_editable_findings_table(low, key_prefix=f"low_{lb.name}", show_object=True)
         _render_inline_recommendations(low)
 
     # --- TLS tab ---
-    with tabs[3]:
+    with tabs[4]:
         if tls_findings:
             render_editable_findings_table(tls_findings, key_prefix=f"tls_{lb.name}", show_object=True)
             _render_inline_recommendations(tls_findings)
@@ -874,7 +880,7 @@ elif page == "Load Balancer Report":
             st.caption("No TLS findings for this load balancer.")
 
     # --- Certificates tab ---
-    with tabs[4]:
+    with tabs[5]:
         if cert_findings:
             render_editable_findings_table(cert_findings, key_prefix=f"cert_{lb.name}", show_object=True)
             _render_inline_recommendations(cert_findings)
@@ -882,7 +888,7 @@ elif page == "Load Balancer Report":
             st.caption("No certificate findings for this load balancer.")
 
     # --- Origin Pools tab ---
-    with tabs[5]:
+    with tabs[6]:
         if lb.origin_findings:
             render_editable_findings_table(lb.origin_findings, key_prefix=f"origin_{lb.name}", show_object=True)
             _render_inline_recommendations(lb.origin_findings)
@@ -890,7 +896,7 @@ elif page == "Load Balancer Report":
             st.caption("No origin pool findings for this load balancer.")
 
     # --- Health Check tab ---
-    with tabs[6]:
+    with tabs[7]:
         if lb.health_check_findings:
             render_editable_findings_table(lb.health_check_findings, key_prefix=f"health_{lb.name}", show_object=True)
             _render_inline_recommendations(lb.health_check_findings)
@@ -898,7 +904,7 @@ elif page == "Load Balancer Report":
             st.caption("No health check findings for this load balancer.")
 
     # --- WAF Configuration tab ---
-    with tabs[7]:
+    with tabs[8]:
         st.subheader("WAF Configuration")
         waf_name = lb.waf_policy_name or "None"
         st.write(f"- **WAF Policy Name:** {waf_name} ({'assigned' if lb.waf_assigned else 'not assigned'})")
@@ -944,7 +950,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(tc_waf, key_prefix=f"tc_waf_{lb.name}", show_object=True)
 
     # --- WAF Policy Details tab ---
-    with tabs[8]:
+    with tabs[9]:
         if lb.waf_policy_findings:
             render_editable_findings_table(lb.waf_policy_findings, key_prefix=f"wafp_{lb.name}", show_object=True)
             _render_inline_recommendations(lb.waf_policy_findings)
@@ -952,7 +958,7 @@ elif page == "Load Balancer Report":
             st.caption("No WAF Policy findings for this LB.")
 
     # --- Bot Defense tab ---
-    with tabs[9]:
+    with tabs[10]:
         if bot_findings:
             render_editable_findings_table(bot_findings, key_prefix=f"bot_{lb.name}", show_object=False)
             _render_inline_recommendations(bot_findings)
@@ -960,7 +966,7 @@ elif page == "Load Balancer Report":
             st.caption("No Bot Defense findings for this LB.")
 
     # --- API Protection tab ---
-    with tabs[10]:
+    with tabs[11]:
         if api_prot_findings:
             render_editable_findings_table(api_prot_findings, key_prefix=f"apiprot_{lb.name}", show_object=False)
             _render_inline_recommendations(api_prot_findings)
@@ -968,7 +974,7 @@ elif page == "Load Balancer Report":
             st.caption("No API Protection findings for this LB.")
 
     # --- Malware Detection tab (WAF-03) ---
-    with tabs[11]:
+    with tabs[12]:
         if malware_findings:
             render_editable_findings_table(malware_findings, key_prefix=f"malware_{lb.name}", show_object=False)
             _render_inline_recommendations(malware_findings)
@@ -976,7 +982,7 @@ elif page == "Load Balancer Report":
             st.caption("No Malware Detection findings for this LB.")
 
     # --- Malicious User Detection (MUD) tab (BOT-02/03) ---
-    with tabs[12]:
+    with tabs[13]:
         if mud_findings:
             render_editable_findings_table(mud_findings, key_prefix=f"mud_{lb.name}", show_object=False)
             _render_inline_recommendations(mud_findings)
@@ -984,7 +990,7 @@ elif page == "Load Balancer Report":
             st.caption("No Malicious User Detection findings for this LB.")
 
     # --- DDoS Protection tab ---
-    with tabs[13]:
+    with tabs[14]:
         if ddos_findings:
             render_editable_findings_table(ddos_findings, key_prefix=f"ddos_{lb.name}", show_object=False)
             _render_inline_recommendations(ddos_findings)
@@ -996,7 +1002,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(tc_threat_intel, key_prefix=f"tc_ti_{lb.name}", show_object=True)
 
     # --- Client-Side Defense tab ---
-    with tabs[14]:
+    with tabs[15]:
         if csd_findings:
             render_editable_findings_table(csd_findings, key_prefix=f"csd_{lb.name}", show_object=False)
             _render_inline_recommendations(csd_findings)
@@ -1008,7 +1014,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(csd_sp, key_prefix=f"csd_sp_{lb.name}", show_object=True)
 
     # --- Service Policies tab ---
-    with tabs[15]:
+    with tabs[16]:
         if lb.service_policy_names:
             st.caption(f"Assigned policies: {', '.join(lb.service_policy_names)}")
 
@@ -1074,7 +1080,7 @@ elif page == "Load Balancer Report":
             st.caption("No service policies linked to this load balancer.")
 
     # --- Rate Limiting tab ---
-    with tabs[16]:
+    with tabs[17]:
         if rate_limit_findings:
             render_editable_findings_table(rate_limit_findings, key_prefix=f"ratelim_{lb.name}", show_object=False)
             _render_inline_recommendations(rate_limit_findings)
@@ -1082,7 +1088,7 @@ elif page == "Load Balancer Report":
             st.caption("No Rate Limiting findings for this LB.")
 
     # --- IP Reputation tab ---
-    with tabs[17]:
+    with tabs[18]:
         if ip_rep_findings:
             render_editable_findings_table(ip_rep_findings, key_prefix=f"iprep_{lb.name}", show_object=False)
             _render_inline_recommendations(ip_rep_findings)
@@ -1098,7 +1104,7 @@ elif page == "Load Balancer Report":
             render_editable_findings_table(tc_ip_rep, key_prefix=f"tc_iprep_{lb.name}", show_object=True)
 
     # --- Informational Findings tab ---
-    with tabs[18]:
+    with tabs[19]:
         if informational_findings:
             st.caption(f"{len(informational_findings)} informational findings")
             render_editable_findings_table(informational_findings, key_prefix=f"info_{lb.name}", show_object=True)
@@ -1106,7 +1112,7 @@ elif page == "Load Balancer Report":
             st.caption("No informational findings.")
 
     # --- Baseline Compliance tab ---
-    with tabs[19]:
+    with tabs[20]:
         if baseline_findings:
             st.caption(f"{len(baseline_findings)} verified compliant checks")
             render_editable_findings_table(baseline_findings, key_prefix=f"baseline_{lb.name}", show_object=True)
@@ -1114,7 +1120,7 @@ elif page == "Load Balancer Report":
             st.caption("No baseline compliance findings.")
 
     # --- Tenant-Wide Context tab ---
-    with tabs[20]:
+    with tabs[21]:
         st.caption("These tenant-wide items are shared with the Namespace Report — "
                    "editing them here updates them everywhere.")
         # Auto-detected items (check finding STATUS, not just existence)
@@ -1139,7 +1145,7 @@ elif page == "Load Balancer Report":
         apply_tls_blindfolded(all_findings, st.session_state.checklist_answers)
 
     # --- Additional Opportunities tab ---
-    with tabs[21]:
+    with tabs[22]:
         not_purchased_open_tab = [f for f in lb_findings_not_purchased if f.status.upper() != "PASS"]
         if not_purchased_open_tab:
             st.caption("Potential enhancements to further strengthen the security posture.")

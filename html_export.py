@@ -452,7 +452,7 @@ def render_lb_report(summary, lb, generated_at=None, entitlements=None, edited_m
     import policy_type as pt
 
     sections = ""
-    for sev in ["HIGH", "MEDIUM", "LOW"]:
+    for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
         items = grouped.get(sev, [])
         if items:
             sections += f'<div class="card"><h2>{sev.title()} Findings ({len(items)})</h2>{_findings_table(items, edited_messages=edited_messages, show_object=True)}{_inline_recommendations(items)}</div>'

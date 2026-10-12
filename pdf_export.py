@@ -155,7 +155,7 @@ def _prepare_html_for_pdf(html: str) -> str:
 
     # 7. Add page breaks before major sections
     html = re.sub(
-        r'(<div class="card">\s*<h2>(?:High|Medium|Low|TLS|Certificates|'
+        r'(<div class="card">\s*<h2>(?:Critical|High|Medium|Low|TLS|Certificates|'
         r'Linked Origin Pool|Health Check|WAF Configuration|WAF Policy|'
         r'Bot Defense|API Protection|Malware Detection|DDoS Protection|'
         r'Client-Side Defense|Service Policies|Rate Limiting|IP Reputation|'
@@ -234,6 +234,7 @@ def _prepare_html_for_pdf(html: str) -> str:
       th, td {{
         padding: 6px 8px;
         font-size: 11px;
+        -pdf-word-wrap: CJK;
       }}
       .badge {{
         -webkit-print-color-adjust: exact;
