@@ -152,7 +152,11 @@ parentheses):
       "SP-01": "MEDIUM",   # Service Policy No Allow-All: High -> Medium
   }
   ```
-- **Fix a broken reference URL** — add to `_URL_REPLACEMENTS` in the same file.
+- **Change a rule's recommendation text / reference link** — edit
+  `RULE_RECOMMENDATIONS` in `rule_recommendations.py` (keyed by rule ID). These
+  curated values replace whatever the auditor JSON contains.
+- **Fix a broken reference URL** (rules not in `RULE_RECOMMENDATIONS`) — add to
+  `_URL_REPLACEMENTS` in `finding_corrections.py`.
 - **Adjust product entitlements** — edit the `PRODUCTS` list in
   `product_entitlements.py`.
 - **Tune the manual checklist** — edit `MANUAL_CHECKLIST_ITEMS` in

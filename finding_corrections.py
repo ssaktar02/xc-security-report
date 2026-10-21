@@ -11,6 +11,7 @@ Apply once, right after parsing, before relationship-building.
 
 from typing import List
 from models import Finding
+from rule_recommendations import RULE_RECOMMENDATIONS
 
 
 # -----------------------------------------------------------------------
@@ -62,6 +63,13 @@ def _fix_reference_urls(finding: Finding) -> None:
         finding.reference_url = _URL_REPLACEMENTS[finding.reference_url]
 
 
+def _apply_curated_recommendations(finding: Finding) -> None:
+    """Override JSON remediation/reference with curated per-rule values."""
+    curated = RULE_RECOMMENDATIONS.get(finding.rule_id)
+    if curated:
+        finding.remediation, finding.reference_url = curated
+
+
 def _annotate_service_policy_count(finding: Finding) -> None:
     """AC-01: Append the count of assigned service policies to the message."""
     if finding.rule_id != "AC-01":
@@ -96,6 +104,7 @@ def _override_severity(finding: Finding) -> None:
 
 CORRECTIONS = [
     _fix_reference_urls,
+    _apply_curated_recommendations,
     _annotate_service_policy_count,
     _override_severity,
 ]
